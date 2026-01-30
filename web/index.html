@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXF Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a1a; color: #fff; overflow: hidden; }
+
+        #toolbar {
+            height: 48px;
+            background: #2a2a2a;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            gap: 12px;
+            z-index: 10;
+            border-bottom: 1px solid #444;
+        }
+
+        #toolbar label {
+            cursor: pointer;
+            padding: 6px 16px;
+            background: #4a9eff;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        #toolbar label:hover { background: #3a8eef; }
+
+        #fileInput { display: none; }
+        #fileName { font-size: 14px; color: #aaa; }
+        #status { font-size: 13px; color: #888; margin-left: auto; }
+
+        html, body {
+            height: 100%;
+        }
+
+        #viewer {
+            width: 100%;
+            height: calc(100vh - 48px);
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <label for="fileInput">Open DXF</label>
+        <input type="file" id="fileInput" accept=".dxf">
+        <span id="fileName">No file loaded</span>
+        <span id="status"></span>
+    </div>
+    <div id="viewer"></div>
+
+    <script type="module">
+        import { DxfViewer } from 'dxf-viewer'
+
+        const container = document.getElementById('viewer')
+        console.log('Container size:', container.clientWidth, container.clientHeight)
+
+        const viewer = new DxfViewer(container, {
+            autoResize: true,
+            antialias: true,
+            blackWhiteInversion: true,
+            colorCorrection: true
+        })
+
+        viewer.Subscribe('message', (e) => console.log('Viewer message:', e))
+        console.log('Canvas:', viewer.GetCanvas()?.width, viewer.GetCanvas()?.height)
+
+        const fileInput = document.getElementById('fileInput')
+        const fileName = document.getElementById('fileName')
+        const status = document.getElementById('status')
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0]
+            if (!file) return
+
+            fileName.textContent = file.name
+            status.textContent = 'Loading...'
+
+            try {
+                viewer.Clear()
+                const url = URL.createObjectURL(file)
+                await viewer.Load({
+                    url,
+                    fonts: [
+                        './fonts/malgun.ttf'
+                    ],
+                    progressCbk: (phase, processed, total) => {
+                        const pct = total ? Math.round(processed / total * 100) : 0
+                        status.textContent = `${phase}: ${pct}%`
+                    },
+                    workerFactory: null
+                })
+                const bounds = viewer.GetBounds()
+                console.log('Bounds:', bounds)
+                console.log('Layers:', [...viewer.GetLayers()])
+                console.log('Canvas after load:', viewer.GetCanvas()?.width, viewer.GetCanvas()?.height)
+                status.textContent = 'Done'
+            } catch (err) {
+                status.textContent = 'Error: ' + err.message
+                console.error(err)
+            }
+        })
+    </script>
+</body>
+</html>

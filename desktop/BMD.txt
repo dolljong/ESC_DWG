@@ -1,0 +1,60 @@
+#변수 정의
+L=5000
+L1=1667
+L2=3333
+ArrowH=1000
+ArrowW=200
+SupH=300
+SupW=200
+TextGap=200
+BMDHeight=1500
+BMDBaseY=-2500
+
+#좌표정의
+#보의절점
+nodeA=0,0
+nodeB=L,0
+nodeL1=L1,0
+nodeL2=L2,0
+
+#하중화살표
+load1top=nodeL1.x,nodeL1.y+ArrowH
+load1arrowL=nodeL1.x-ArrowW,nodeL1.y+ArrowW
+load1arrowR=nodeL1.x+ArrowW,nodeL1.y+ArrowW
+load2top=nodeL2.x,nodeL2.y+ArrowH
+load2arrowL=nodeL2.x-ArrowW,nodeL2.y+ArrowW
+load2arrowR=nodeL2.x+ArrowW,nodeL2.y+ArrowW
+
+#지점
+supAL=nodeA.x-SupW,nodeA.y-SupH
+supAR=nodeA.x+SupW,nodeA.y-SupH
+supBL=nodeB.x-SupW,nodeB.y-SupH
+supBR=nodeB.x+SupW,nodeB.y-SupH
+supBbotL=supBL.x,supBL.y-100
+supBbotR=supBR.x,supBR.y-100
+
+#BMD좌표
+bmdP1=0,BMDBaseY
+bmdP2=L1,BMDBaseY+BMDHeight
+bmdP3=L2,BMDBaseY+BMDHeight
+bmdP4=L,BMDBaseY
+
+#텍스트위치
+txtp1=nodeL1.x,load1top.y+TextGap
+txtp2=nodeL2.x,load2top.y+TextGap
+txtbmd=L/2,BMDBaseY+BMDHeight+TextGap
+
+#Entity정의
+line nodeA nodeB
+line load1top nodeL1
+line load1arrowL nodeL1 load1arrowR
+line load2top nodeL2
+line load2arrowL nodeL2 load2arrowR
+line nodeA supAL supAR nodeA
+line nodeB supBL supBR nodeB
+line supBbotL supBbotR
+line bmdP1 bmdP2 bmdP3 bmdP4 bmdP1
+text txtp1 C 250 "10kN"
+text txtp2 C 250 "10kN"
+text txtbmd C 250 "BMD"
+hdim nodeA nodeB 2500
