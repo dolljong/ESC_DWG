@@ -29,6 +29,18 @@
         }
         #toolbar label:hover { background: #3a8eef; }
 
+        #toolbar button {
+            cursor: pointer;
+            padding: 6px 16px;
+            background: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        #toolbar button:hover { background: #43A047; }
+
         #fileInput { display: none; }
         #fileName { font-size: 14px; color: #aaa; }
         #status { font-size: 13px; color: #888; margin-left: auto; }
@@ -47,6 +59,7 @@
     <div id="toolbar">
         <label for="fileInput">Open DXF</label>
         <input type="file" id="fileInput" accept=".dxf">
+        <button id="loadExample">Load Example</button>
         <span id="fileName">No file loaded</span>
         <span id="status"></span>
     </div>
@@ -72,36 +85,35 @@
         const fileName = document.getElementById('fileName')
         const status = document.getElementById('status')
 
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0]
-            if (!file) return
-
-            fileName.textContent = file.name
+        async function loadDxf(url, name) {
+            fileName.textContent = name
             status.textContent = 'Loading...'
-
             try {
                 viewer.Clear()
-                const url = URL.createObjectURL(file)
                 await viewer.Load({
                     url,
-                    fonts: [
-                        './fonts/malgun.ttf'
-                    ],
+                    fonts: ['./fonts/malgun.ttf'],
                     progressCbk: (phase, processed, total) => {
                         const pct = total ? Math.round(processed / total * 100) : 0
                         status.textContent = `${phase}: ${pct}%`
                     },
                     workerFactory: null
                 })
-                const bounds = viewer.GetBounds()
-                console.log('Bounds:', bounds)
-                console.log('Layers:', [...viewer.GetLayers()])
-                console.log('Canvas after load:', viewer.GetCanvas()?.width, viewer.GetCanvas()?.height)
                 status.textContent = 'Done'
             } catch (err) {
                 status.textContent = 'Error: ' + err.message
                 console.error(err)
             }
+        }
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0]
+            if (!file) return
+            await loadDxf(URL.createObjectURL(file), file.name)
+        })
+
+        document.getElementById('loadExample').addEventListener('click', () => {
+            loadDxf('./T-011.dxf', 'T-011.dxf')
         })
     </script>
 </body>

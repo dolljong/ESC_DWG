@@ -735,8 +735,31 @@ def get_optimal_figure_size():
     except:
         return (16, 12)
 
-def on_click(event):
-    pass
+_pan_data = None
+
+def on_press(event):
+    global _pan_data
+    if event.button != 1 or event.xdata is None or event.ydata is None:
+        return
+    if current_toolbar and current_toolbar.mode != '':
+        return
+    _pan_data = (event.xdata, event.ydata)
+
+def on_motion(event):
+    global _pan_data
+    if _pan_data is None or event.xdata is None or event.ydata is None:
+        return
+    dx = _pan_data[0] - event.xdata
+    dy = _pan_data[1] - event.ydata
+    cur_xlim = ax.get_xlim()
+    cur_ylim = ax.get_ylim()
+    ax.set_xlim(cur_xlim[0] + dx, cur_xlim[1] + dx)
+    ax.set_ylim(cur_ylim[0] + dy, cur_ylim[1] + dy)
+    current_canvas.draw()
+
+def on_release(event):
+    global _pan_data
+    _pan_data = None
 
 def on_scroll(event):
     global ax
@@ -794,7 +817,9 @@ def visualize_dxf(dxf_file=None):
         setup_clean_axes(ax)
 
         current_canvas = FigureCanvasTkAgg(current_figure, master=plot_frame)
-        current_canvas.mpl_connect('button_press_event', on_click)
+        current_canvas.mpl_connect('button_press_event', on_press)
+        current_canvas.mpl_connect('motion_notify_event', on_motion)
+        current_canvas.mpl_connect('button_release_event', on_release)
         current_canvas.mpl_connect('scroll_event', on_scroll)
         current_canvas.draw()
 
@@ -811,7 +836,9 @@ def visualize_dxf(dxf_file=None):
         setup_clean_axes(ax)
 
         current_canvas = FigureCanvasTkAgg(current_figure, master=plot_frame)
-        current_canvas.mpl_connect('button_press_event', on_click)
+        current_canvas.mpl_connect('button_press_event', on_press)
+        current_canvas.mpl_connect('motion_notify_event', on_motion)
+        current_canvas.mpl_connect('button_release_event', on_release)
         current_canvas.mpl_connect('scroll_event', on_scroll)
         current_canvas.draw()
 
