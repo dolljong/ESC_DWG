@@ -1,0 +1,8 @@
+# Belt and braces: secrets.php is already safe on its own (it only returns a
+# string, so a direct request outputs nothing), but deny it anyway.
+<Files "secrets.php">
+    Require all denied
+</Files>
+<Files "secrets.example.php">
+    Require all denied
+</Files>

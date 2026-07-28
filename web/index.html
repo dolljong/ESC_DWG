@@ -7,7 +7,9 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: #fff; overflow: hidden; }
+        html, body { height: 100%; }
 
+        /* ── Toolbar ─────────────────────────────────── */
         #toolbar {
             height: 48px;
             background: #2a2a2a;
@@ -18,7 +20,6 @@
             z-index: 10;
             border-bottom: 1px solid #444;
         }
-
         #toolbar label {
             cursor: pointer;
             padding: 6px 16px;
@@ -28,7 +29,6 @@
             font-weight: bold;
         }
         #toolbar label:hover { background: #3a8eef; }
-
         #toolbar button {
             cursor: pointer;
             padding: 6px 16px;
@@ -40,18 +40,166 @@
             font-weight: bold;
         }
         #toolbar button:hover { background: #43A047; }
-
+        #toolbar button.toggle-btn {
+            background: #666;
+        }
+        #toolbar button.toggle-btn:hover { background: #777; }
+        #toolbar button.toggle-btn.active {
+            background: #ff9800;
+        }
+        #toolbar button.toggle-btn.active:hover { background: #fb8c00; }
         #fileInput { display: none; }
         #fileName { font-size: 14px; color: #aaa; }
         #status { font-size: 13px; color: #888; margin-left: auto; }
 
-        html, body {
-            height: 100%;
+        /* ── Content area ────────────────────────────── */
+        #content-area {
+            display: flex;
+            height: calc(100vh - 48px);
         }
 
+        /* ── Script panel ────────────────────────────── */
+        #script-panel {
+            width: 380px;
+            min-width: 380px;
+            background: #252525;
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            display: none;          /* hidden by default */
+        }
+        #script-panel.visible {
+            display: flex;
+        }
+        #script-panel h3 {
+            padding: 10px 12px 6px;
+            font-size: 14px;
+            color: #ccc;
+            border-bottom: 1px solid #333;
+        }
+        #script-editor {
+            flex: 1;
+            min-height: 120px;
+            margin: 8px;
+            padding: 8px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #444;
+            border-radius: 4px;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            resize: none;
+            tab-size: 4;
+        }
+        #script-editor:focus { outline: 1px solid #4a9eff; }
+        #script-actions {
+            display: flex;
+            gap: 8px;
+            padding: 0 8px 8px;
+        }
+        #run-script-btn {
+            flex: 1;
+            padding: 8px;
+            background: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #run-script-btn:hover { background: #43A047; }
+        #script-errors {
+            max-height: 120px;
+            overflow-y: auto;
+            margin: 0 8px 8px;
+            padding: 6px 8px;
+            background: #3a1c1c;
+            border: 1px solid #6b2c2c;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #ff8a80;
+            white-space: pre-wrap;
+            display: none;          /* hidden when no errors */
+        }
+
+        /* ── Chat panel ──────────────────────────────── */
+        #chat-section {
+            display: flex;
+            flex-direction: column;
+            height: 45%;
+            min-height: 200px;
+            border-top: 1px solid #444;
+        }
+        #model-row {
+            padding: 0 8px 6px;
+            font-size: 11.5px;
+            color: #777;
+        }
+        #chat-log {
+            flex: 1;
+            min-height: 0;          /* allow the flex child to scroll */
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin: 0 8px 6px;
+            font-size: 12.5px;
+        }
+        .chat-msg {
+            padding: 6px 8px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            line-height: 1.45;
+        }
+        .chat-msg.user {
+            background: #2f4f7f;
+            color: #e8f0ff;
+            align-self: flex-end;
+            max-width: 90%;
+        }
+        .chat-msg.assistant { background: #2d3d2d; color: #cfe8cf; }
+        .chat-msg.status { padding: 2px 8px; color: #999; font-style: italic; }
+        .chat-msg.error {
+            background: #3a1c1c;
+            border: 1px solid #6b2c2c;
+            color: #ff8a80;
+        }
+        #chat-input-row {
+            display: flex;
+            gap: 6px;
+            padding: 0 8px 8px;
+        }
+        #chat-input {
+            flex: 1;
+            resize: none;
+            padding: 6px 8px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #444;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 12.5px;
+        }
+        #chat-input:focus { outline: 1px solid #4a9eff; }
+        #chat-send {
+            padding: 0 14px;
+            background: #4a9eff;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #chat-send:hover { background: #3a8eef; }
+        #chat-send:disabled { background: #555; cursor: default; }
+
+        /* ── Viewer ──────────────────────────────────── */
         #viewer {
-            width: 100%;
-            height: calc(100vh - 48px);
+            flex: 1;
+            min-width: 0;
         }
     </style>
 </head>
@@ -60,61 +208,59 @@
         <label for="fileInput">Open DXF</label>
         <input type="file" id="fileInput" accept=".dxf">
         <button id="loadExample">Load Example</button>
+        <button id="toggleScript" class="toggle-btn">Script</button>
         <span id="fileName">No file loaded</span>
         <span id="status"></span>
     </div>
-    <div id="viewer"></div>
 
-    <script type="module">
-        import { DxfViewer } from 'dxf-viewer'
+    <div id="content-area">
+        <div id="script-panel">
+            <h3>Script Editor</h3>
+            <textarea id="script-editor" spellcheck="false"># Variables
+H = 1000
+B = 2000
 
-        const container = document.getElementById('viewer')
-        console.log('Container size:', container.clientWidth, container.clientHeight)
+# Points: name = x_expr, y_expr
+p1 = 0, 0
+p2 = p1.x+B, p1.y
+p3 = p2.x, p2.y+H
+p4 = p1.x, p1.y+H
+pc = B/2, H/2
 
-        const viewer = new DxfViewer(container, {
-            autoResize: true,
-            antialias: true,
-            blackWhiteInversion: true,
-            colorCorrection: true
-        })
+# Entities (use point names or (expr,expr))
+rect p1 p3
+line p1 p3
+line p2 p4
+circle pc H/4
 
-        viewer.Subscribe('message', (e) => console.log('Viewer message:', e))
-        console.log('Canvas:', viewer.GetCanvas()?.width, viewer.GetCanvas()?.height)
+# text &lt;pt&gt; [align] height "content"
+# align: L,C,R + B,M,T (ex: LB, CT, R)
+text p1 LT 50 "p1(LB)"
+text p3 RB 50 "p3(RT)"
+text pc CM 80 "CENTER"
+</textarea>
+            <div id="script-actions">
+                <button id="run-script-btn">Run Script</button>
+            </div>
+            <div id="script-errors"></div>
 
-        const fileInput = document.getElementById('fileInput')
-        const fileName = document.getElementById('fileName')
-        const status = document.getElementById('status')
+            <div id="chat-section">
+                <h3>AI Assistant</h3>
+                <div id="model-row">
+                    <span id="model-label"></span>
+                </div>
+                <div id="chat-log"></div>
+                <div id="chat-input-row">
+                    <textarea id="chat-input" rows="2" spellcheck="false"
+                              placeholder="예: 가로 2000 세로 1000 사각형에 대각선과 중앙 원"></textarea>
+                    <button id="chat-send">Send</button>
+                </div>
+            </div>
+        </div>
 
-        async function loadDxf(url, name) {
-            fileName.textContent = name
-            status.textContent = 'Loading...'
-            try {
-                viewer.Clear()
-                await viewer.Load({
-                    url,
-                    fonts: ['./fonts/malgun.ttf'],
-                    progressCbk: (phase, processed, total) => {
-                        const pct = total ? Math.round(processed / total * 100) : 0
-                        status.textContent = `${phase}: ${pct}%`
-                    },
-                    workerFactory: null
-                })
-                status.textContent = 'Done'
-            } catch (err) {
-                status.textContent = 'Error: ' + err.message
-                console.error(err)
-            }
-        }
+        <div id="viewer"></div>
+    </div>
 
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0]
-            if (!file) return
-            await loadDxf(URL.createObjectURL(file), file.name)
-        })
-
-        document.getElementById('loadExample').addEventListener('click', () => {
-            loadDxf('./T-011.dxf', 'T-011.dxf')
-        })
-    </script>
+    <script type="module" src="./src/main.js"></script>
 </body>
 </html>

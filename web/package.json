@@ -4,6 +4,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@tarikjabiri/dxf": "^2.8.9",
     "dxf-viewer": "^1.0.34"
   },
   "devDependencies": {

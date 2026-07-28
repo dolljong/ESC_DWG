@@ -1,5 +1,13 @@
 web/node_modules/
 web/dist/
-dist/
 __pycache__/
 *.pyc
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+# build config, not a secret
+!.env.production
+*.local
+secrets.php
