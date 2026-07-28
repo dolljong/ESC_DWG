@@ -1,9 +1,12 @@
 /**
  * Single source of truth for the ESC_DWG script grammar.
  *
- * Used as the LLM system prompt, and available for in-app help. When the
- * grammar in ../script-parser.js changes, change it here too — otherwise the
- * model keeps generating against the old rules.
+ * Used as the LLM system prompt. When the grammar in ../script-parser.js
+ * changes, change it here too — otherwise the model keeps generating against
+ * the old rules.
+ *
+ * The in-app 도움말 dialog documents the same grammar for users, in Korean,
+ * from ../script-help.js. Grammar changes belong in both files.
  */
 
 export const SCRIPT_SPEC = `\
@@ -62,6 +65,24 @@ Variables and points must be defined on an earlier line than their first use.
         Filled ring. These are DIAMETERS, not radii, and outer must exceed inner.
         donut pc 100 200
 
+    hdim <pt1> <pt2> <offset>
+        Horizontal dimension: measures the HORIZONTAL distance between the two
+        points. Offset is where the dimension line sits relative to pt1:
+        positive is above, negative is below.
+        hdim p1 p2 -150
+
+    ldim <pt1> <pt2> <offset>
+        Vertical dimension: measures the VERTICAL distance between the two
+        points. Positive offset puts the dimension line to the right of pt1,
+        negative to the left.
+        ldim p2 p3 150
+
+    adim <pt1> <pt2> <offset>
+        Aligned dimension: measures the true distance between the two points,
+        with the dimension line parallel to them. Offset is the perpendicular
+        distance from that line, positive to the left of pt1 → pt2.
+        adim p1 p3 100
+
     text <pt> [align] <height> "content"
         Alignment is optional and defaults to LB. HEIGHT IS REQUIRED and always
         comes immediately before the quoted content — omitting it is the single
@@ -85,15 +106,17 @@ Trigonometric functions take RADIANS — use radians(45) to convert from degrees
 - Comments start with #, either on their own line or after a command.
 - Text content must be wrapped in double quotes and cannot itself contain a
   double quote. It must fit on one line.
-- Dimension commands are NOT supported here. Never emit hdim, ldim or adim.
-  To annotate a measurement, draw it with line and text instead.
+- Dimension text height is chosen automatically from the distance measured, so
+  hdim/ldim/adim take no height argument. Do not add one.
+- Offsets are distances, not coordinates: they are measured from the first
+  point, not from the origin.
 - There are no layers, colours, line weights or line types. Do not invent
   commands or options beyond the list above.`
 
 /** Few-shot examples: request → expected output. */
 export const EXAMPLES = [
   {
-    user: '가로 2000, 세로 1000 사각형에 대각선 두 개와 중앙에 원을 그려줘',
+    user: '가로 2000, 세로 1000 사각형에 대각선 두 개와 중앙에 원을 그리고 치수도 넣어줘',
     assistant: `\
 # Dimensions
 B = 2000
@@ -110,7 +133,11 @@ rect p1 p3
 line p1 p3
 line p2 p4
 circle pc H/4
-text pc CM 80 "CENTER"`,
+text pc CM 80 "CENTER"
+
+# Dimensions, placed clear of the outline
+hdim p1 p2 -200
+ldim p2 p3 200`,
   },
   {
     user: '반지름 500인 원 둘레에 볼트 구멍 6개를 균등 배치해줘',

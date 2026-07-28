@@ -69,8 +69,8 @@ function resolvePoint(token, variables) {
   throw new Error(`Not a point: ${token}`);
 }
 
-/** Tokenise an argument string into point tokens. */
-function parsePointArgs(argsStr, variables) {
+/** Split an argument string on whitespace, keeping parenthesised groups whole. */
+function tokeniseArgs(argsStr) {
   const tokens = [];
   let i = 0;
   const s = argsStr.trim();
@@ -94,7 +94,12 @@ function parsePointArgs(argsStr, variables) {
       i = j;
     }
   }
-  return tokens.map((t) => resolvePoint(t, variables));
+  return tokens;
+}
+
+/** Tokenise an argument string into point tokens. */
+function parsePointArgs(argsStr, variables) {
+  return tokeniseArgs(argsStr).map((t) => resolvePoint(t, variables));
 }
 
 /** Extract point-string + remaining tokens from a remainder string
@@ -267,9 +272,32 @@ export function parseScript(script) {
         throw new Error('text syntax: text <point> [LB|CB|RB|LM|CM|RM|LT|CT|RT|L|C|R] height "content"');
       }
 
-      // ── dimension commands (unsupported in web) ───────────
+      // ── hdim / ldim / adim ────────────────────────────────
+      // <pt1> <pt2> <offset>, matching the desktop build. The offset is where
+      // the dimension line sits; how it is measured differs per command and is
+      // resolved in dxf-generator, which needs the raw points anyway.
       if (cmdWord === 'hdim' || cmdWord === 'ldim' || cmdWord === 'adim') {
-        errors.push({ line: lineNo, message: `${cmdWord} is not supported in the web version` });
+        const tokens = tokeniseArgs(line.slice(cmdWord.length));
+        if (tokens.length !== 3) {
+          throw new Error(`${cmdWord} expects: ${cmdWord} <pt1> <pt2> <offset>, got ${tokens.length} arguments`);
+        }
+        const p1 = resolvePoint(tokens[0], variables);
+        const p2 = resolvePoint(tokens[1], variables);
+        const offset = Number(safeEval(tokens[2], variables));
+        if (!Number.isFinite(offset)) throw new Error(`${cmdWord} offset must be a number`);
+
+        // A dimension whose two points collapse along the measured direction
+        // has no geometry. The viewer only logs a console warning for that, so
+        // reject it here where the line number can be reported.
+        const span = cmdWord === 'hdim' ? Math.abs(p2[0] - p1[0])
+                   : cmdWord === 'ldim' ? Math.abs(p2[1] - p1[1])
+                   : Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+        if (span === 0) {
+          const what = cmdWord === 'hdim' ? 'horizontal ' : cmdWord === 'ldim' ? 'vertical ' : '';
+          throw new Error(`${cmdWord} measures zero ${what}distance between the two points`);
+        }
+
+        entities.push({ type: cmdWord, p1, p2, offset });
         continue;
       }
 

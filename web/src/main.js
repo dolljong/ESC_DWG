@@ -1,6 +1,7 @@
 import { DxfViewer } from 'dxf-viewer';
 import { parseScript } from './script-parser.js';
 import { generateDxf } from './dxf-generator.js';
+import { SCRIPT_HELP_HTML } from './script-help.js';
 import { initChat } from './llm/chat-ui.js';
 
 // ─── Viewer initialisation ─────────────────────────────────────────────────
@@ -22,6 +23,9 @@ const scriptPanel   = document.getElementById('script-panel');
 const scriptEditor  = document.getElementById('script-editor');
 const runScriptBtn  = document.getElementById('run-script-btn');
 const errorsDiv     = document.getElementById('script-errors');
+const helpBtn       = document.getElementById('showHelp');
+const helpOverlay   = document.getElementById('help-overlay');
+const helpBody      = document.getElementById('help-body');
 
 // ─── Load DXF helper ────────────────────────────────────────────────────────
 async function loadDxf(url, name) {
@@ -63,6 +67,30 @@ toggleBtn.addEventListener('click', () => {
   toggleBtn.classList.toggle('active');
   // Trigger viewer resize after layout change
   window.dispatchEvent(new Event('resize'));
+});
+
+// ─── Script help dialog ─────────────────────────────────────────────────────
+// Content is static authored markup from script-help.js, never user input.
+helpBody.innerHTML = SCRIPT_HELP_HTML;
+
+function setHelpVisible(visible) {
+  helpOverlay.classList.toggle('visible', visible);
+  helpBtn.classList.toggle('active', visible);
+  // Always reopen at the top rather than wherever the last reader left off.
+  if (visible) helpBody.scrollTop = 0;
+}
+
+helpBtn.addEventListener('click', () => {
+  setHelpVisible(!helpOverlay.classList.contains('visible'));
+});
+document.getElementById('help-close').addEventListener('click', () => setHelpVisible(false));
+
+// Clicking the backdrop closes; clicking inside the dialog must not.
+helpOverlay.addEventListener('click', (e) => {
+  if (e.target === helpOverlay) setHelpVisible(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setHelpVisible(false);
 });
 
 // ─── Run script ─────────────────────────────────────────────────────────────
