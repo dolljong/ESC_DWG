@@ -77,6 +77,31 @@
             color: #ccc;
             border-bottom: 1px solid #333;
         }
+        #script-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 8px 6px 12px;
+            border-bottom: 1px solid #333;
+        }
+        #script-header h3 {
+            padding: 0;
+            border: none;
+            flex: 1;
+        }
+        #example-select {
+            max-width: 190px;
+            padding: 4px 6px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        #example-select:hover { border-color: #4a9eff; }
+        #example-select:focus { outline: 1px solid #4a9eff; }
         #script-editor {
             flex: 1;
             min-height: 120px;
@@ -110,6 +135,18 @@
             cursor: pointer;
         }
         #run-script-btn:hover { background: #43A047; }
+        #save-dxf-btn {
+            padding: 8px 14px;
+            background: #4a9eff;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        #save-dxf-btn:hover { background: #3a8eef; }
         #script-errors {
             max-height: 120px;
             overflow-y: auto;
@@ -302,32 +339,15 @@
 
     <div id="content-area">
         <div id="script-panel">
-            <h3>Script Editor</h3>
-            <textarea id="script-editor" spellcheck="false"># Variables
-H = 1000
-B = 2000
-
-# Points: name = x_expr, y_expr
-p1 = 0, 0
-p2 = p1.x+B, p1.y
-p3 = p2.x, p2.y+H
-p4 = p1.x, p1.y+H
-pc = B/2, H/2
-
-# Entities (use point names or (expr,expr))
-rect p1 p3
-line p1 p3
-line p2 p4
-circle pc H/4
-
-# text &lt;pt&gt; [align] height "content"
-# align: L,C,R + B,M,T (ex: LB, CT, R)
-text p1 LT 50 "p1(LB)"
-text p3 RB 50 "p3(RT)"
-text pc CM 80 "CENTER"
-</textarea>
+            <div id="script-header">
+                <h3>Script Editor</h3>
+                <!-- Options and initial content come from src/script-examples.js -->
+                <select id="example-select" title="예제 스크립트 불러오기"></select>
+            </div>
+            <textarea id="script-editor" spellcheck="false"></textarea>
             <div id="script-actions">
                 <button id="run-script-btn">Run Script</button>
+                <button id="save-dxf-btn" title="현재 스크립트를 DXF 파일로 내려받기">DXF 저장</button>
             </div>
             <div id="script-errors"></div>
 

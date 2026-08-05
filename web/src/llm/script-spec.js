@@ -59,7 +59,9 @@ Variables and points must be defined on an earlier line than their first use.
 
     solid <pt> <pt> <pt> [<pt>]
         Filled triangle (3 points) or quadrilateral (4 points).
-        solid p1 p2 p3 p4
+        With 4 points the FOURTH is diagonal to the third (DXF order), not the
+        next one round the perimeter — perimeter order draws a bowtie.
+        solid (0,0) (100,0) (0,100) (100,100)    # bottom-left, bottom-right, top-left, top-right
 
     donut <center> <innerDiameter> <outerDiameter>
         Filled ring. These are DIAMETERS, not radii, and outer must exceed inner.
@@ -106,8 +108,9 @@ Trigonometric functions take RADIANS — use radians(45) to convert from degrees
 - Comments start with #, either on their own line or after a command.
 - Text content must be wrapped in double quotes and cannot itself contain a
   double quote. It must fit on one line.
-- Dimension text height is chosen automatically from the distance measured, so
-  hdim/ldim/adim take no height argument. Do not add one.
+- Dimension text height is chosen automatically from the overall size of the
+  drawing and is the same for every dimension in it, so hdim/ldim/adim take no
+  height argument. Do not add one.
 - Offsets are distances, not coordinates: they are measured from the first
   point, not from the origin.
 - There are no layers, colours, line weights or line types. Do not invent
