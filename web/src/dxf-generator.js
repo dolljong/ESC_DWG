@@ -54,22 +54,22 @@ const DIM_HEIGHT_RATIO = 0.025;
  *
  * Sizes are "paper" sizes in the CAD sense: what they mean on a printed sheet.
  * Every one of them is multiplied by `scale` (DIMSCALE) before it is drawn, so
- * one number resizes the whole annotation to suit the drawing. The values are
- * the ISO-25 defaults, except the arrowhead, which keeps the smaller size this
- * project has always drawn.
+ * one number resizes the whole annotation to suit the drawing.
  *
- * `scale: 'auto'` derives DIMSCALE from the drawing's own extents — see
- * autoDimScale. It is the default because these drawings range from a 400 mm
- * beam section to a 5 m wall, and one fixed size cannot serve both.
+ * The values are the house style these drawings are dimensioned in: red, dots
+ * on the measured points, DIMSCALE 100. Setting `scale: 'auto'` instead derives
+ * DIMSCALE from the drawing's own extents — see autoDimScale — which suits a
+ * one-off sketch whose size is not known in advance.
  */
 export const DIM_DEFAULTS = {
-  scale: 'auto',        // DIMSCALE — 'auto' or a positive number
+  scale: 100,           // DIMSCALE — 'auto' or a positive number
   textHeight: 2.5,      // DIMTXT
-  arrow: 'closed',      // 'closed' (filled arrowhead) | 'tick' (oblique stroke) | 'none'
-  arrowSize: 1.5,       // DIMASZ, or DIMTSZ for ticks
-  extOffset: 0.625,     // DIMEXO — gap between the measured point and its extension line
-  extBeyond: 1.25,      // DIMEXE — extension line overshoot past the dimension line
-  color: 256,           // ACI colour index; 256 is BYLAYER
+  arrow: 'dot',         // 'closed' (filled arrowhead) | 'dot' | 'tick' (oblique stroke) | 'none'
+  arrowSize: 1,         // DIMASZ, or DIMTSZ for ticks
+  extOffset: 10,        // DIMEXO — gap between the measured point and its extension line
+  extBeyond: 2,         // DIMEXE — extension line overshoot past the dimension line
+  color: 1,             // ACI colour index for the lines; 1 is red, 256 is BYLAYER
+  textColor: 7,         // ACI colour for the measurement text; 7 is white/black
 };
 
 /** DIMGAP, the clearance around the text. Not worth a dialog row of its own. */
@@ -163,6 +163,7 @@ function resolveDimStyle(entities, settings) {
     scale,
     arrow: base.arrow,
     color: Number(base.color) || BYLAYER,
+    textColor: Number(base.textColor) || BYLAYER,
     textHeight: base.textHeight * scale,
     arrowSize: base.arrowSize * scale,
     extOffset: base.extOffset * scale,
@@ -193,8 +194,13 @@ function createDimStyle(dxf, st) {
   style.DIMSCALE = st.scale;
   style.DIMTXT = b.textHeight;
   // Arrowheads and oblique ticks are alternatives: a non-zero DIMTSZ is what
-  // tells CAD to draw ticks, and it makes DIMASZ irrelevant.
-  style.DIMASZ = st.arrow === 'closed' ? b.arrowSize : 0;
+  // tells CAD to draw ticks, and it makes DIMASZ irrelevant. Dots are sized by
+  // DIMASZ as well — the terminator shape itself is DIMBLK, which is not
+  // written: the writer emits it into group 342, a hard pointer that wants a
+  // block-record handle, so a name like "_DOT" there is a broken reference. The
+  // drawn block below is what every reader shows, so the dot survives; only a
+  // CAD user who restyles the dimension gets arrowheads back.
+  style.DIMASZ = st.arrow === 'closed' || st.arrow === 'dot' ? b.arrowSize : 0;
   style.DIMTSZ = st.arrow === 'tick' ? b.arrowSize : 0;
   // Ticks are normally drawn with the dimension line running on past them.
   style.DIMDLE = st.arrow === 'tick' ? b.arrowSize : 0;
@@ -203,7 +209,7 @@ function createDimStyle(dxf, st) {
   style.DIMGAP = DIM_GAP;
   style.DIMCLRD = st.color;      // dimension line
   style.DIMCLRE = st.color;      // extension lines
-  style.DIMCLRT = st.color;      // text
+  style.DIMCLRT = st.textColor;  // text
   style.DIMDEC = 0;              // whole units; these drawings are in millimetres
   // Zero suppression off. With DIMDEC 0 there is no fractional part to trim, so
   // this only ever costs nothing — but leaving it unset is not safe: dxf-viewer
@@ -328,8 +334,10 @@ function addDimBlock(dxf, ent, geom, st, index) {
   const { d1, d2, v, normal } = geom;
   const arrow = st.arrowSize;
   // Everything in the block carries the chosen colour, so the dimension keeps
-  // it whether CAD draws the block or regenerates from the style.
+  // it whether CAD draws the block or regenerates from the style. Text has its
+  // own, the way DIMCLRT is separate from DIMCLRD/DIMCLRE.
   const opts = { colorNumber: st.color };
+  const textOpts = { colorNumber: st.textColor };
 
   // Ticks are drawn on the line rather than inside it, so the line runs on past
   // them — DIMDLE. Arrowheads sit within the measured span and need no overrun.
@@ -387,9 +395,26 @@ function addDimBlock(dxf, ent, geom, st, index) {
     );
   };
 
+  // A filled circle centred on the measured point, DIMASZ across — the CAD
+  // "_DOT" terminator. Tessellated for the same reason the donut entity is:
+  // dxf-viewer draws no filled circle, only triangles.
+  const addDot = (tip) => {
+    const r = arrow / 2;
+    const at = (a) => point3d(tip[0] + r * Math.cos(a), tip[1] + r * Math.sin(a), 0);
+    const centre = point3d(tip[0], tip[1], 0);
+    for (let i = 0; i < DONUT_SEGMENTS; i++) {
+      const a0 = (2 * Math.PI * i) / DONUT_SEGMENTS;
+      const a1 = (2 * Math.PI * (i + 1)) / DONUT_SEGMENTS;
+      addTriangle(block, centre, at(a0), at(a1), opts);
+    }
+  };
+
   if (st.arrow === 'closed') {
     addArrow(d1, v);
     addArrow(d2, [-v[0], -v[1]]);
+  } else if (st.arrow === 'dot') {
+    addDot(d1);
+    addDot(d2);
   } else if (st.arrow === 'tick') {
     addTick(d1);
     addTick(d2);
@@ -397,7 +422,7 @@ function addDimBlock(dxf, ent, geom, st, index) {
 
   const textPos = point3d(geom.textMid[0], geom.textMid[1], 0);
   block.addText(textPos, st.textHeight, dimText(geom), {
-    ...opts,
+    ...textOpts,
     rotation: geom.textAngle,
     horizontalAlignment: TextHorizontalAlignment.Center,
     verticalAlignment: TextVerticalAlignment.Middle,

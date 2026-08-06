@@ -585,21 +585,27 @@
                 </p>
 
                 <label class="dim-row">
-                    <span>치수 색</span>
+                    <span>치수선 색</span>
                     <span id="dim-color" class="dim-swatches"></span>
+                </label>
+
+                <label class="dim-row">
+                    <span>문자 색</span>
+                    <span id="dim-text-color" class="dim-swatches"></span>
                 </label>
 
                 <label class="dim-row">
                     <span>치수선 모양</span>
                     <select id="dim-arrow">
                         <option value="closed">채운 화살표</option>
+                        <option value="dot">점 (도트)</option>
                         <option value="tick">사선 틱 (건축)</option>
                         <option value="none">없음</option>
                     </select>
                 </label>
 
                 <label class="dim-row">
-                    <span>화살표 · 틱 크기</span>
+                    <span>화살표 · 점 · 틱 크기</span>
                     <input id="dim-arrow-size" type="number" min="0" step="0.25">
                 </label>
 

@@ -9,7 +9,10 @@
 
 import { DIM_DEFAULTS, autoDimScale } from './dxf-generator.js';
 
-const STORAGE_KEY = 'esc_dwg.dimSettings';
+// Versioned: the defaults changed to the house style (red, dots, DIMSCALE 100),
+// and a settings entry saved under the old ones would hide them for anyone who
+// had already opened the dialog once.
+const STORAGE_KEY = 'esc_dwg.dimSettings.v2';
 
 /**
  * The AutoCAD Color Index entries worth offering, with the RGB each one shows
@@ -81,23 +84,31 @@ export function initDimSettings({ getEntities, onChange }) {
   const scaleInput = document.getElementById('dim-scale');
   const autoBox = document.getElementById('dim-scale-auto');
   const scaleNote = document.getElementById('dim-scale-note');
-  const swatches = document.getElementById('dim-color');
-
   // ── Colour swatches ───────────────────────────────────────────────────────
-  for (const c of COLORS) {
-    const el = document.createElement('button');
-    el.type = 'button';
-    el.className = c.rgb ? 'dim-swatch' : 'dim-swatch bylayer';
-    el.dataset.aci = String(c.aci);
-    el.title = `${c.label} (${c.aci})`;
-    if (c.rgb) el.style.background = c.rgb;
-    else el.textContent = 'BYLAYER';
-    el.addEventListener('click', () => {
-      settings.color = c.aci;
-      apply();
-    });
-    swatches.appendChild(el);
+  /** Fill a swatch row that edits one colour setting. */
+  function buildSwatches(id, key) {
+    const row = document.getElementById(id);
+    for (const c of COLORS) {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = c.rgb ? 'dim-swatch' : 'dim-swatch bylayer';
+      el.dataset.aci = String(c.aci);
+      el.title = `${c.label} (${c.aci})`;
+      if (c.rgb) el.style.background = c.rgb;
+      else el.textContent = 'BYLAYER';
+      el.addEventListener('click', () => {
+        settings[key] = c.aci;
+        apply();
+      });
+      row.appendChild(el);
+    }
+    return { row, key };
   }
+
+  const swatchRows = [
+    buildSwatches('dim-color', 'color'),
+    buildSwatches('dim-text-color', 'textColor'),
+  ];
 
   /** Push `settings` into the form controls. */
   function render() {
@@ -115,8 +126,10 @@ export function initDimSettings({ getEntities, onChange }) {
     scaleInput.value = String(auto ? round(autoScale) : settings.scale);
     scaleNote.textContent = auto ? `현재 도면 기준 ${round(autoScale)}` : 'DIMSCALE';
 
-    for (const el of swatches.children) {
-      el.classList.toggle('selected', Number(el.dataset.aci) === settings.color);
+    for (const { row, key } of swatchRows) {
+      for (const el of row.children) {
+        el.classList.toggle('selected', Number(el.dataset.aci) === settings[key]);
+      }
     }
   }
 
