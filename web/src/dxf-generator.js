@@ -26,8 +26,8 @@ const DONUT_SEGMENTS = 32;
  * its fourth corner missing and renders as half of the intended quad. Two
  * three-corner faces sidestep that entirely.
  */
-function addTriangle(dxf, a, b, c) {
-  dxf.add3dFace(a, b, c, c);
+function addTriangle(dxf, a, b, c, options) {
+  dxf.add3dFace(a, b, c, c, options);
 }
 
 // ─── Alignment mapping ─────────────────────────────────────────────────────
@@ -48,6 +48,35 @@ const V_ALIGN = {
 
 /** Dimension text height as a fraction of the drawing's larger extent. */
 const DIM_HEIGHT_RATIO = 0.025;
+
+/**
+ * Dimension appearance, as the 치수선 설정 dialog stores it.
+ *
+ * Sizes are "paper" sizes in the CAD sense: what they mean on a printed sheet.
+ * Every one of them is multiplied by `scale` (DIMSCALE) before it is drawn, so
+ * one number resizes the whole annotation to suit the drawing. The values are
+ * the ISO-25 defaults, except the arrowhead, which keeps the smaller size this
+ * project has always drawn.
+ *
+ * `scale: 'auto'` derives DIMSCALE from the drawing's own extents — see
+ * autoDimScale. It is the default because these drawings range from a 400 mm
+ * beam section to a 5 m wall, and one fixed size cannot serve both.
+ */
+export const DIM_DEFAULTS = {
+  scale: 'auto',        // DIMSCALE — 'auto' or a positive number
+  textHeight: 2.5,      // DIMTXT
+  arrow: 'closed',      // 'closed' (filled arrowhead) | 'tick' (oblique stroke) | 'none'
+  arrowSize: 1.5,       // DIMASZ, or DIMTSZ for ticks
+  extOffset: 0.625,     // DIMEXO — gap between the measured point and its extension line
+  extBeyond: 1.25,      // DIMEXE — extension line overshoot past the dimension line
+  color: 256,           // ACI colour index; 256 is BYLAYER
+};
+
+/** DIMGAP, the clearance around the text. Not worth a dialog row of its own. */
+const DIM_GAP = 0.625;
+
+/** ACI code meaning "take the layer's colour". */
+const BYLAYER = 256;
 
 /** Corner points bounding an entity, enough to size the drawing. */
 function* entityExtentPoints(ent) {
@@ -86,16 +115,8 @@ function* entityExtentPoints(ent) {
   }
 }
 
-/**
- * A single text height shared by every dimension in the drawing.
- *
- * Sizing each dimension from its own measured span — what the desktop build
- * does — makes a 300 mm wall thickness annotate at a twentieth of the size of
- * the 5 m height beside it, which reads as a mistake rather than as detail.
- * Deriving one height from the overall extents instead keeps a drawing legible
- * whether it spans 10 units or 100,000, and keeps every dimension consistent.
- */
-function drawingDimHeight(entities) {
+/** Larger of the drawing's two extents, or 0 if there is nothing to measure. */
+function drawingExtent(entities) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const ent of entities) {
     for (const [x, y] of entityExtentPoints(ent)) {
@@ -106,11 +127,48 @@ function drawingDimHeight(entities) {
     }
   }
   const extent = Math.max(maxX - minX, maxY - minY);
+  return Number.isFinite(extent) && extent > 0 ? extent : 0;
+}
+
+/**
+ * DIMSCALE derived from the drawing's own size.
+ *
+ * Sizing each dimension from its own measured span — what the desktop build
+ * does — makes a 300 mm wall thickness annotate at a twentieth of the size of
+ * the 5 m height beside it, which reads as a mistake rather than as detail.
+ * Deriving one scale from the overall extents instead keeps a drawing legible
+ * whether it spans 10 units or 100,000, and keeps every dimension consistent.
+ *
+ * At the default text height this puts the text at 2.5% of the drawing, which
+ * is what this project drew before any of it was adjustable.
+ */
+export function autoDimScale(entities) {
+  const extent = drawingExtent(entities);
   // Degenerate input (no entities, or all of them at one point) still needs a
-  // height that produces visible text.
-  return Number.isFinite(extent) && extent > 0
-    ? Math.max(extent * DIM_HEIGHT_RATIO, 1)
-    : 1;
+  // scale that produces visible text.
+  return Math.max(extent * DIM_HEIGHT_RATIO, 1) / DIM_DEFAULTS.textHeight;
+}
+
+/**
+ * Turn the dialog's settings into the absolute sizes this drawing is drawn at.
+ *
+ * @param {object[]} entities
+ * @param {Partial<typeof DIM_DEFAULTS>} settings
+ */
+function resolveDimStyle(entities, settings) {
+  const base = { ...DIM_DEFAULTS, ...settings };
+  const scale = Number(base.scale) > 0 ? Number(base.scale) : autoDimScale(entities);
+  return {
+    base,
+    scale,
+    arrow: base.arrow,
+    color: Number(base.color) || BYLAYER,
+    textHeight: base.textHeight * scale,
+    arrowSize: base.arrowSize * scale,
+    extOffset: base.extOffset * scale,
+    extBeyond: base.extBeyond * scale,
+    gap: DIM_GAP * scale,
+  };
 }
 
 /**
@@ -122,20 +180,30 @@ function drawingDimHeight(entities) {
  * dxf-viewer's parser rejects outright, dropping the whole override. A named
  * style is also what a CAD user expects to find when they open the file.
  *
+ * The style carries the paper sizes and DIMSCALE separately, the way CAD stores
+ * them, so a user who restyles a dimension there gets back what we drew.
+ *
  * @param {DxfWriter} dxf
- * @param {number} height
+ * @param {ReturnType<typeof resolveDimStyle>} st
  */
-function createDimStyle(dxf, height) {
+function createDimStyle(dxf, st) {
   const name = 'ESC_DIM';
   const style = dxf.tables.addDimStyle(name);
-  style.DIMTXT = height;         // text height
-  style.DIMASZ = height * 0.6;   // arrowhead size — desktop uses this same ratio
-  // The desktop build leaves these at their defaults, which are absolute sizes
-  // and so vanish next to text scaled up for a large drawing. The ratios are
-  // the ISO-25 defaults restated relative to text height.
-  style.DIMEXE = height * 0.5;   // extension line overshoot past the dim line
-  style.DIMEXO = height * 0.25;  // gap between the measured point and its ext line
-  style.DIMGAP = height * 0.25;  // gap between the dim line and its text
+  const b = st.base;
+  style.DIMSCALE = st.scale;
+  style.DIMTXT = b.textHeight;
+  // Arrowheads and oblique ticks are alternatives: a non-zero DIMTSZ is what
+  // tells CAD to draw ticks, and it makes DIMASZ irrelevant.
+  style.DIMASZ = st.arrow === 'closed' ? b.arrowSize : 0;
+  style.DIMTSZ = st.arrow === 'tick' ? b.arrowSize : 0;
+  // Ticks are normally drawn with the dimension line running on past them.
+  style.DIMDLE = st.arrow === 'tick' ? b.arrowSize : 0;
+  style.DIMEXE = b.extBeyond;
+  style.DIMEXO = b.extOffset;
+  style.DIMGAP = DIM_GAP;
+  style.DIMCLRD = st.color;      // dimension line
+  style.DIMCLRE = st.color;      // extension lines
+  style.DIMCLRT = st.color;      // text
   style.DIMDEC = 0;              // whole units; these drawings are in millimetres
   // Zero suppression off. With DIMDEC 0 there is no fractional part to trim, so
   // this only ever costs nothing — but leaving it unset is not safe: dxf-viewer
@@ -186,7 +254,7 @@ function dimDirection(ent) {
  * perpendicular with the larger y (ties going to −x) is how dxf-viewer picks it
  * too — worth matching, since preview and file must not disagree.
  */
-function dimGeometry(ent, height) {
+function dimGeometry(ent, st) {
   const dir = dimDirection(ent);
   // The offset is perpendicular to `dir` in every case, so p1 projected onto
   // the dimension line is exactly the offset point.
@@ -209,7 +277,10 @@ function dimGeometry(ent, height) {
     // Direction the dimension measures along, for DXF group 50.
     angle: (Math.atan2(dir[1], dir[0]) * 180) / Math.PI,
     // Text sits clear of the dimension line by DIMGAP + half its own height.
-    textMid: [mid[0] + normal[0] * height * 0.75, mid[1] + normal[1] * height * 0.75],
+    textMid: [
+      mid[0] + normal[0] * (st.gap + st.textHeight / 2),
+      mid[1] + normal[1] * (st.gap + st.textHeight / 2),
+    ],
     // Reading direction along the dimension line: 0 for horizontal, 90 for vertical.
     textAngle: (Math.atan2(normal[1], normal[0]) * 180) / Math.PI - 90,
   };
@@ -248,18 +319,26 @@ function dimText(geom) {
  * Same geometry the entity describes, so a CAD user can still stretch or
  * restyle the dimension and have it regenerate to match.
  */
-function addDimBlock(dxf, ent, geom, height, index) {
+function addDimBlock(dxf, ent, geom, st, index) {
   // Anonymous dimension blocks are *D1, *D2, … — addBlock() on the writer
   // strips the leading '*', so go through the blocks section directly.
   const block = dxf.blocks.addBlock(`*D${index}`, dxf.objects, false);
   block.flags = BlockFlags.AnonymousBlock;
 
   const { d1, d2, v, normal } = geom;
-  const arrow = height * 0.6;   // DIMASZ
-  const extOvershoot = height * 0.5;    // DIMEXE
-  const extGap = height * 0.25;         // DIMEXO
+  const arrow = st.arrowSize;
+  // Everything in the block carries the chosen colour, so the dimension keeps
+  // it whether CAD draws the block or regenerates from the style.
+  const opts = { colorNumber: st.color };
 
-  block.addLine(point3d(d1[0], d1[1], 0), point3d(d2[0], d2[1], 0));
+  // Ticks are drawn on the line rather than inside it, so the line runs on past
+  // them — DIMDLE. Arrowheads sit within the measured span and need no overrun.
+  const overrun = st.arrow === 'tick' ? arrow : 0;
+  block.addLine(
+    point3d(d1[0] - v[0] * overrun, d1[1] - v[1] * overrun, 0),
+    point3d(d2[0] + v[0] * overrun, d2[1] + v[1] * overrun, 0),
+    opts,
+  );
 
   // Extension lines: from just clear of the measured point to just past the
   // dimension line. Skipped when the dimension line passes through the point.
@@ -267,12 +346,13 @@ function addDimBlock(dxf, ent, geom, height, index) {
     const dx = to[0] - from[0];
     const dy = to[1] - from[1];
     const len = Math.hypot(dx, dy);
-    if (len <= extGap) return;
+    if (len <= st.extOffset) return;
     const ux = dx / len;
     const uy = dy / len;
     block.addLine(
-      point3d(from[0] + ux * extGap, from[1] + uy * extGap, 0),
-      point3d(to[0] + ux * extOvershoot, to[1] + uy * extOvershoot, 0),
+      point3d(from[0] + ux * st.extOffset, from[1] + uy * st.extOffset, 0),
+      point3d(to[0] + ux * st.extBeyond, to[1] + uy * st.extBeyond, 0),
+      opts,
     );
   };
   addExtLine(ent.p1, d1);
@@ -291,13 +371,33 @@ function addDimBlock(dxf, ent, geom, height, index) {
       point3d(tip[0], tip[1], 0),
       point3d(bx - hx, by - hy, 0),
       point3d(bx + hx, by + hy, 0),
+      opts,
     );
   };
-  addArrow(d1, v);
-  addArrow(d2, [-v[0], -v[1]]);
+
+  // An oblique stroke through the point, at 45° between the dimension line and
+  // its normal — the architectural tick.
+  const addTick = (tip) => {
+    const ux = (v[0] + normal[0]) / Math.SQRT2;
+    const uy = (v[1] + normal[1]) / Math.SQRT2;
+    block.addLine(
+      point3d(tip[0] - ux * arrow, tip[1] - uy * arrow, 0),
+      point3d(tip[0] + ux * arrow, tip[1] + uy * arrow, 0),
+      opts,
+    );
+  };
+
+  if (st.arrow === 'closed') {
+    addArrow(d1, v);
+    addArrow(d2, [-v[0], -v[1]]);
+  } else if (st.arrow === 'tick') {
+    addTick(d1);
+    addTick(d2);
+  }
 
   const textPos = point3d(geom.textMid[0], geom.textMid[1], 0);
-  block.addText(textPos, height, dimText(geom), {
+  block.addText(textPos, st.textHeight, dimText(geom), {
+    ...opts,
     rotation: geom.textAngle,
     horizontalAlignment: TextHorizontalAlignment.Center,
     verticalAlignment: TextVerticalAlignment.Middle,
@@ -317,12 +417,15 @@ function addDimBlock(dxf, ent, geom, height, index) {
  *   DONUT, one four-corner face per `solid` — instead of the triangle soup the
  *   viewer needs. Set this for a file the user downloads; leave it off for
  *   anything handed straight back to the viewer, which draws neither.
+ * @param {Partial<typeof DIM_DEFAULTS>} [options.dim]
+ *   Dimension appearance from the 치수선 설정 dialog. Omitted keys fall back to
+ *   DIM_DEFAULTS, so passing nothing draws what this project always drew.
  * @returns {string}           — DXF file content
  */
-export function generateDxf(entities, { forCad = false } = {}) {
+export function generateDxf(entities, { forCad = false, dim = {} } = {}) {
   const dxf = new DxfWriter();
   // One style for the whole drawing, created only if something needs it.
-  const dimHeight = drawingDimHeight(entities);
+  const dimSizes = resolveDimStyle(entities, dim);
   let dimStyle = null;
   let dimCount = 0;
 
@@ -440,14 +543,15 @@ export function generateDxf(entities, { forCad = false } = {}) {
       case 'hdim':
       case 'ldim':
       case 'adim': {
-        if (dimStyle === null) dimStyle = createDimStyle(dxf, dimHeight);
-        const geom = dimGeometry(ent, dimHeight);
+        if (dimStyle === null) dimStyle = createDimStyle(dxf, dimSizes);
+        const geom = dimGeometry(ent, dimSizes);
         const opts = {
           styleName: dimStyle,
+          colorNumber: dimSizes.color,
           definitionPoint: dimAnchor(geom),
           // Group 11. Required, and the position CAD draws the text at.
           middlePoint: point3d(geom.textMid[0], geom.textMid[1], 0),
-          blockName: addDimBlock(dxf, ent, geom, dimHeight, ++dimCount),
+          blockName: addDimBlock(dxf, ent, geom, dimSizes, ++dimCount),
         };
         const first  = point3d(ent.p1[0], ent.p1[1], 0);
         const second = point3d(ent.p2[0], ent.p2[1], 0);

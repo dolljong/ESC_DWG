@@ -4,6 +4,7 @@ import { generateDxf } from './dxf-generator.js';
 import { SCRIPT_HELP_HTML } from './script-help.js';
 import { SCRIPT_EXAMPLES } from './script-examples.js';
 import { createPointOverlay } from './point-labels.js';
+import { initDimSettings } from './dim-settings.js';
 import { initChat } from './llm/chat-ui.js';
 
 // ─── Viewer initialisation ─────────────────────────────────────────────────
@@ -156,6 +157,22 @@ function refreshPoints() {
 
 scriptEditor.addEventListener('input', refreshPoints);
 
+// ─── Dimension settings ─────────────────────────────────────────────────────
+// Appearance only — the script says what to measure, this says how it looks.
+// Changes redraw immediately so the dialog's effect is visible while it is open.
+const dimSettings = initDimSettings({
+  getEntities: () => {
+    // Quiet parse: the dialog only needs the drawing's size for its auto-scale
+    // readout, and must not report script errors on the user's behalf.
+    try {
+      return parseScript(scriptEditor.value).entities;
+    } catch {
+      return [];
+    }
+  },
+  onChange: () => runScript(),
+});
+
 // ─── Run script ─────────────────────────────────────────────────────────────
 runScriptBtn.addEventListener('click', runScript);
 
@@ -183,7 +200,7 @@ async function runScript() {
 
   // Generate DXF
   try {
-    const dxfString = generateDxf(entities);
+    const dxfString = generateDxf(entities, { dim: dimSettings.get() });
     const blob = new Blob([dxfString], { type: 'application/dxf' });
     const url = URL.createObjectURL(blob);
     await loadDxf(url, 'script output');
@@ -204,7 +221,7 @@ saveDxfBtn.addEventListener('click', () => {
 
   let dxfString;
   try {
-    dxfString = generateDxf(entities, { forCad: true });
+    dxfString = generateDxf(entities, { forCad: true, dim: dimSettings.get() });
   } catch (err) {
     errorsDiv.style.display = 'block';
     errorsDiv.textContent += `\nDXF generation error: ${err.message}`;
