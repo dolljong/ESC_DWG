@@ -34,12 +34,43 @@ parentheses: (0, 0) or (B/2, H*2).
 
 Variables and points must be defined on an earlier line than their first use.
 
+## Point-first style (REQUIRED)
+
+Name every position the drawing uses, in a block near the top, with a trailing
+\`#\` comment saying what it is. Then draw using ONLY those names — do not put
+inline (x, y) coordinates in entity commands.
+
+    # ── 점 ──────────────────────
+    p1 = 0, 0            # 좌하
+    p2 = B, 0            # 우하
+    p3 = B, H            # 우상
+    p4 = 0, H            # 좌상
+    pTitle = B/2, H+150  # 제목 위치
+
+    rect p1 p3           correct
+    rect (0,0) (B,H)     avoid — the corners now have no name
+
+This includes text anchors, dimension helper points and label positions: give
+them names too (pTitle, pNote, d1, d2 …).
+
+Naming guide — short, ASCII, and grouped by role so the set reads as a legend:
+p1..pn for a main outline, o1..on / i1..in for outer vs inner outlines,
+a1..an for a traced perimeter, c1..cn for circle centres, d1..dn or e1..en for
+dimension helper points, pTitle / pNote / pTop for label anchors. Do not name a
+point after a command word (line, rect, text, arc, solid, donut, hdim, ldim,
+adim, circle, pline, polyline) or a math function.
+
+Why: the named points are the drawing's vocabulary. When revising a script,
+REUSE the existing names — keep them stable, add new points to the point block
+rather than renaming or inlining coordinates, and refer to geometry by name
+("move p3", "dimension from a5 to t3") so edits stay one-line changes.
+
 ## Entity commands
 
     line <pt> <pt> [<pt> ...]
         Connects consecutive points with straight segments.
         line p1 p2
-        line (0,0) (100,200) (300,400)
+        line p1 p2 p3
 
     circle <center> <radius>
         circle pc H/4
@@ -51,7 +82,6 @@ Variables and points must be defined on an earlier line than their first use.
     rect <corner> <opposite corner>
         Axis-aligned rectangle from two diagonal corners.
         rect p1 p3
-        rect (0,0) (B,H)
 
     polyline <pt> <pt> <pt> ...      (alias: pline)
         Open polyline through the points.
@@ -61,7 +91,7 @@ Variables and points must be defined on an earlier line than their first use.
         Filled triangle (3 points) or quadrilateral (4 points).
         With 4 points the FOURTH is diagonal to the third (DXF order), not the
         next one round the perimeter — perimeter order draws a bowtie.
-        solid (0,0) (100,0) (0,100) (100,100)    # bottom-left, bottom-right, top-left, top-right
+        solid q1 q2 q3 q4    # q1 bottom-left, q2 bottom-right, q3 top-left, q4 top-right
 
     donut <center> <innerDiameter> <outerDiameter>
         Filled ring. These are DIAMETERS, not radii, and outer must exceed inner.
@@ -121,16 +151,16 @@ export const EXAMPLES = [
   {
     user: '가로 2000, 세로 1000 사각형에 대각선 두 개와 중앙에 원을 그리고 치수도 넣어줘',
     assistant: `\
-# Dimensions
-B = 2000
-H = 1000
+# ── Sizes ────────────────────────────
+B = 2000       # width
+H = 1000       # height
 
-# Corners
-p1 = 0, 0
-p2 = B, 0
-p3 = B, H
-p4 = 0, H
-pc = B/2, H/2
+# ── Points ───────────────────────────
+p1 = 0, 0            # bottom-left
+p2 = B, 0            # bottom-right
+p3 = B, H            # top-right
+p4 = 0, H            # top-left
+pc = B/2, H/2        # centre
 
 rect p1 p3
 line p1 p3
@@ -145,24 +175,26 @@ ldim p2 p3 200`,
   {
     user: '반지름 500인 원 둘레에 볼트 구멍 6개를 균등 배치해줘',
     assistant: `\
-R = 500
-d = 60
+R = 500        # bolt circle radius
+d = 60         # hole diameter
 
-circle (0,0) R
+# ── Points — one per hole, angle in the comment ──
+pc = 0, 0                                    # centre
+h1 = R*cos(radians(0)),   R*sin(radians(0))    # 0 deg
+h2 = R*cos(radians(60)),  R*sin(radians(60))   # 60 deg
+h3 = R*cos(radians(120)), R*sin(radians(120))  # 120 deg
+h4 = R*cos(radians(180)), R*sin(radians(180))  # 180 deg
+h5 = R*cos(radians(240)), R*sin(radians(240))  # 240 deg
+h6 = R*cos(radians(300)), R*sin(radians(300))  # 300 deg
 
-a0 = radians(0)
-a1 = radians(60)
-a2 = radians(120)
-a3 = radians(180)
-a4 = radians(240)
-a5 = radians(300)
+circle pc R
 
-circle (R*cos(a0), R*sin(a0)) d/2
-circle (R*cos(a1), R*sin(a1)) d/2
-circle (R*cos(a2), R*sin(a2)) d/2
-circle (R*cos(a3), R*sin(a3)) d/2
-circle (R*cos(a4), R*sin(a4)) d/2
-circle (R*cos(a5), R*sin(a5)) d/2`,
+circle h1 d/2
+circle h2 d/2
+circle h3 d/2
+circle h4 d/2
+circle h5 d/2
+circle h6 d/2`,
   },
 ]
 
@@ -176,9 +208,14 @@ ${SCRIPT_SPEC}
 Reply with the script and nothing else — no explanation, no commentary before
 or after. A single \`\`\` fenced block is acceptable.
 
-Prefer named variables and points over bare numbers so the drawing stays
-readable and easy to adjust. Use # comments on their own lines to label
-sections. Choose sensible dimensions when the user does not specify them.
+Structure every script the same way: sizes as named variables, then a block of
+named points each with a trailing # comment naming it, then the entity commands
+written with those names only. Choose sensible dimensions when the user does not
+specify them.
+
+When a current script is supplied, treat its point names as fixed: edit or add
+point definitions and entity lines, but keep every existing name pointing at the
+same feature so the user can go on referring to it.
 
 The user may write in Korean; text drawn with the \`text\` command may be Korean,
 but keep variable and point names in ASCII.`
