@@ -3,6 +3,7 @@ import { parseScript } from './script-parser.js';
 import { generateDxf } from './dxf-generator.js';
 import { SCRIPT_HELP_HTML } from './script-help.js';
 import { SCRIPT_EXAMPLES } from './script-examples.js';
+import { createPointOverlay } from './point-labels.js';
 import { initChat } from './llm/chat-ui.js';
 
 // ─── Viewer initialisation ─────────────────────────────────────────────────
@@ -25,6 +26,7 @@ const scriptEditor  = document.getElementById('script-editor');
 const runScriptBtn  = document.getElementById('run-script-btn');
 const saveDxfBtn    = document.getElementById('save-dxf-btn');
 const errorsDiv     = document.getElementById('script-errors');
+const pointsBtn     = document.getElementById('show-points-btn');
 const helpBtn       = document.getElementById('showHelp');
 const helpOverlay   = document.getElementById('help-overlay');
 const helpBody      = document.getElementById('help-body');
@@ -127,6 +129,33 @@ exampleSelect.addEventListener('change', () => {
   runScript();
 });
 
+// ─── Point name overlay ─────────────────────────────────────────────────────
+// Red dot + name at every point the script defines, so a drawing can be talked
+// about — and asked of the AI — by point name rather than by coordinate.
+const pointOverlay = createPointOverlay(viewer, container);
+
+pointsBtn.addEventListener('click', () => {
+  const on = !pointOverlay.isVisible();
+  pointsBtn.classList.toggle('active', on);
+  pointOverlay.setVisible(on);
+  // Show what is in the editor right now, which need not be what was last run.
+  if (on) refreshPoints();
+});
+
+/**
+ * Re-read the points from the editor without touching the error panel.
+ *
+ * Typing is not a failed run: half-written lines would otherwise flash errors
+ * at every keystroke. Whatever parses still yields its points, so a new point
+ * appears the moment its line is complete.
+ */
+function refreshPoints() {
+  if (!pointOverlay.isVisible()) return;
+  pointOverlay.setPoints(parseScript(scriptEditor.value).points);
+}
+
+scriptEditor.addEventListener('input', refreshPoints);
+
 // ─── Run script ─────────────────────────────────────────────────────────────
 runScriptBtn.addEventListener('click', runScript);
 
@@ -135,7 +164,7 @@ function parseEditor() {
   const script = scriptEditor.value.trim();
   if (!script) return [];
 
-  const { entities, errors } = parseScript(script);
+  const { entities, points, errors } = parseScript(script);
 
   if (errors.length > 0) {
     errorsDiv.style.display = 'block';
@@ -144,6 +173,7 @@ function parseEditor() {
     errorsDiv.style.display = 'none';
     errorsDiv.textContent = '';
   }
+  pointOverlay.setPoints(points);
   return entities;
 }
 

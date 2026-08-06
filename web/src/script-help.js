@@ -43,6 +43,32 @@ pc = B/2, H/2</pre>
 <p>점이 필요한 자리에는 괄호를 쓴 즉석 점도 넣을 수 있습니다 — <code>(0, 0)</code>, <code>(B/2, H*2)</code>.</p>`,
   },
   {
+    title: '권장 작성 순서 — 점 먼저',
+    body: `
+<p>예제들이 모두 이 방식으로 쓰여 있습니다.
+   <b>치수 변수 → 점 정의(주석으로 이름표) → 도형 명령</b> 순으로 쓰고,
+   도형 명령에는 좌표 대신 <b>점 이름만</b> 넣습니다.</p>
+<pre># ── 점 ──────────────────
+p1 = 0, 0            <span class="ok"># 좌하</span>
+p2 = B, 0            <span class="ok"># 우하</span>
+p3 = B, H            <span class="ok"># 우상</span>
+p4 = 0, H            <span class="ok"># 좌상</span>
+pTitle = B/2, H+150  <span class="ok"># 제목 위치</span>
+
+rect p1 p3           <span class="ok"># 이름으로 그리기</span>
+rect (0,0) (B,H)     <span class="bad"># 좌표 직접 — 나중에 지칭할 수 없음</span></pre>
+<p class="note">이렇게 해 두면 꼭짓점을 옮길 때 점 정의 한 줄만 고치면 되고,
+   치수선·문자를 덧붙일 때도 이미 있는 점을 그대로 쓸 수 있습니다.
+   AI에게 <i>"p3 를 오른쪽으로 200 옮겨줘"</i>, <i>"a5 에서 t3 까지 치수 넣어줘"</i>
+   처럼 <b>점 이름으로 지시</b>할 수도 있습니다.</p>
+<p class="note">문자 위치·치수 보조점에도 이름을 붙이세요(<code>pTitle</code>, <code>pNote</code>,
+   <code>d1</code> …). 이름은 ASCII로 짓고, 명령어(<code>line rect text</code> …)나
+   함수 이름과 겹치지 않게 합니다.</p>
+<p class="note"><b>[점 이름]</b> 버튼을 켜면 정의된 점 위치에 <span class="bad">붉은 점</span>과
+   이름이 도면 위에 표시됩니다. 편집하는 대로 바로 갱신되고, 확대·축소해도 크기가 그대로이며,
+   저장하는 DXF 파일에는 들어가지 않습니다.</p>`,
+  },
+  {
     title: '도형 명령어',
     body: `
 <dl>
@@ -135,12 +161,12 @@ int float radians degrees</code> 와 상수 <code>pi</code>.</p>
 B = 2000
 H = 1000
 
-# 꼭짓점
-p1 = 0, 0
-p2 = B, 0
-p3 = B, H
-p4 = 0, H
-pc = B/2, H/2
+# 점
+p1 = 0, 0            <span class="ok"># 좌하</span>
+p2 = B, 0            <span class="ok"># 우하</span>
+p3 = B, H            <span class="ok"># 우상</span>
+p4 = 0, H            <span class="ok"># 좌상</span>
+pc = B/2, H/2        <span class="ok"># 중심</span>
 
 rect p1 p3
 line p1 p3

@@ -147,6 +147,20 @@
             white-space: nowrap;
         }
         #save-dxf-btn:hover { background: #3a8eef; }
+        #show-points-btn {
+            padding: 8px 12px;
+            background: #666;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        #show-points-btn:hover { background: #777; }
+        #show-points-btn.active { background: #e53935; }
+        #show-points-btn.active:hover { background: #d32f2f; }
         #script-errors {
             max-height: 120px;
             overflow-y: auto;
@@ -237,6 +251,49 @@
         #viewer {
             flex: 1;
             min-width: 0;
+        }
+
+        /* ── Point name overlay ──────────────────────── */
+        /* Sits over the canvas; never takes the pointer, so pan and zoom still
+           reach the viewer underneath. */
+        #point-overlay {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+            display: none;
+            z-index: 5;
+        }
+        #point-overlay.visible { display: block; }
+        .point-marker {
+            position: absolute;
+            top: 0;
+            left: 0;
+            will-change: transform;
+        }
+        .point-dot {
+            position: absolute;
+            width: 7px;
+            height: 7px;
+            margin: -3.5px 0 0 -3.5px;
+            border-radius: 50%;
+            background: #ff2d2d;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+        }
+        .point-label {
+            position: absolute;
+            left: 7px;
+            bottom: 4px;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 1;
+            color: #ff5c5c;
+            white-space: nowrap;
+            /* Readable over both the dark background and white geometry. */
+            text-shadow:
+                -1px -1px 0 #000, 1px -1px 0 #000,
+                -1px  1px 0 #000, 1px  1px 0 #000;
         }
 
         /* ── Help dialog ─────────────────────────────── */
@@ -347,6 +404,8 @@
             <textarea id="script-editor" spellcheck="false"></textarea>
             <div id="script-actions">
                 <button id="run-script-btn">Run Script</button>
+                <button id="show-points-btn" class="toggle-btn"
+                        title="스크립트에 정의된 점 위치와 이름을 도면 위에 표시">점 이름</button>
                 <button id="save-dxf-btn" title="현재 스크립트를 DXF 파일로 내려받기">DXF 저장</button>
             </div>
             <div id="script-errors"></div>

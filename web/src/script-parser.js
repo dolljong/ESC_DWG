@@ -2,7 +2,7 @@
  * Script parser — ports the Python ESC_DWG script editor logic to JavaScript.
  *
  * Input : multi-line script string
- * Output: { entities: EntityDef[], errors: {line, message}[] }
+ * Output: { entities: EntityDef[], points: PointDef[], errors: {line, message}[] }
  */
 
 import { Point, evaluate as safeEval } from './expression.js';
@@ -152,14 +152,25 @@ const ALIGN_KEYS_RE = Object.keys(ALIGN_MAP)
 
 /**
  * Parse a script string and return intermediate entity definitions + errors.
+ *
+ * `points` lists every named point the script defines, in definition order,
+ * which is what the viewer's 점 이름 overlay labels. A name assigned twice keeps
+ * its first position in the list and carries the last value, matching what the
+ * rest of the script sees.
+ *
  * @param {string} script
- * @returns {{ entities: object[], errors: {line:number, message:string}[] }}
+ * @returns {{
+ *   entities: object[],
+ *   points: {name:string, x:number, y:number, line:number}[],
+ *   errors: {line:number, message:string}[],
+ * }}
  */
 export function parseScript(script) {
   // Null prototype: a name like `toString` must not resolve to anything.
   const variables = Object.create(null);
   const entities = [];
   const errors = [];
+  const points = new Map();
 
   const lines = script.split('\n');
   for (let idx = 0; idx < lines.length; idx++) {
@@ -314,12 +325,15 @@ export function parseScript(script) {
             const px = Number(safeEval(parts[0].trim(), variables));
             const py = Number(safeEval(parts[1].trim(), variables));
             variables[varName] = new Point(px, py);
+            points.set(varName, { name: varName, x: px, y: py, line: lineNo });
             continue;
           } catch {
             // fall through to scalar
           }
         }
         variables[varName] = safeEval(exprStr, variables);
+        // A name reused for a plain number is no longer a point to label.
+        points.delete(varName);
         continue;
       }
 
@@ -329,5 +343,5 @@ export function parseScript(script) {
     }
   }
 
-  return { entities, errors };
+  return { entities, points: [...points.values()], errors };
 }
