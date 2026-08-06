@@ -6,6 +6,7 @@ import {
   DxfWriter,
   point3d,
   point2d,
+  BlockFlags,
   LWPolylineFlags,
   TextHorizontalAlignment,
   TextVerticalAlignment,
@@ -165,6 +166,55 @@ function dimLinePoint(ent) {
   }
 }
 
+/** Unit vector along the direction the dimension measures. */
+function dimDirection(ent) {
+  if (ent.type === 'hdim') return [1, 0];
+  if (ent.type === 'ldim') return [0, 1];
+  const [x1, y1] = ent.p1;
+  const [x2, y2] = ent.p2;
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  return [(x2 - x1) / len, (y2 - y1) / len];
+}
+
+/**
+ * Everything needed to both describe and draw one dimension.
+ *
+ * `d1`/`d2` are the measured points projected onto the dimension line, which is
+ * where the arrowheads land. `normal` points to the side the text sits on:
+ * above a horizontal dimension, left of a vertical one, whichever way round the
+ * two points were given. That is the AutoCAD convention, and picking the
+ * perpendicular with the larger y (ties going to −x) is how dxf-viewer picks it
+ * too — worth matching, since preview and file must not disagree.
+ */
+function dimGeometry(ent, height) {
+  const dir = dimDirection(ent);
+  // The offset is perpendicular to `dir` in every case, so p1 projected onto
+  // the dimension line is exactly the offset point.
+  const d1 = dimLinePoint(ent);
+  const span = (ent.p2[0] - ent.p1[0]) * dir[0] + (ent.p2[1] - ent.p1[1]) * dir[1];
+  const d2 = [d1[0] + dir[0] * span, d1[1] + dir[1] * span];
+
+  // Direction actually drawn, d1 → d2.
+  const s = Math.sign(span) || 1;
+  const v = [dir[0] * s, dir[1] * s];
+  const normal = v[1] < -v[0] ? [v[1], -v[0]] : [-v[1], v[0]];
+
+  const mid = [(d1[0] + d2[0]) / 2, (d1[1] + d2[1]) / 2];
+  return {
+    d1,
+    d2,
+    v,
+    normal,
+    length: Math.abs(span),
+    // Direction the dimension measures along, for DXF group 50.
+    angle: (Math.atan2(dir[1], dir[0]) * 180) / Math.PI,
+    // Text sits clear of the dimension line by DIMGAP + half its own height.
+    textMid: [mid[0] + normal[0] * height * 0.75, mid[1] + normal[1] * height * 0.75],
+    // Reading direction along the dimension line: 0 for horizontal, 90 for vertical.
+    textAngle: (Math.atan2(normal[1], normal[0]) * 180) / Math.PI - 90,
+  };
+}
+
 /**
  * Where the dimension line sits, as an absolute point the writer stores in
  * group code 10. The library's own `offset` option is not usable: for aligned
@@ -172,16 +222,89 @@ function dimLinePoint(ent) {
  * the measured direction. Computing the anchor here also reproduces the
  * desktop offset conventions exactly.
  *
- * Both viewer and CAD project the measured points onto the dimension line, so
- * only the line's position matters, not where along it this point falls.
+ * Readers project the measured points onto the dimension line, so only the
+ * line's position matters, not where along it this point falls — but it must be
+ * a real point on that line. Writing a half-zeroed one (x taken from the offset,
+ * y left at 0) is what CAD read as a dimension running off at an angle.
  */
-function dimAnchor(ent) {
-  const [x, y] = dimLinePoint(ent);
-  // Only the axis the offset acts along carries meaning for hdim/ldim; the
-  // other is left at zero so it cannot drag the line off the measured points.
-  if (ent.type === 'hdim') return point3d(0, y, 0);
-  if (ent.type === 'ldim') return point3d(x, 0, 0);
-  return point3d(x, y, 0);
+function dimAnchor(geom) {
+  return point3d(geom.d2[0], geom.d2[1], 0);
+}
+
+/** Measurement text, formatted the way DIMDEC 0 asks for: whole units. */
+function dimText(geom) {
+  return String(Math.round(geom.length));
+}
+
+/**
+ * Draw the dimension into an anonymous block and return its name.
+ *
+ * A DIMENSION entity carries the measurement as definition points, but what a
+ * CAD program *draws* is the block named in group 2 — every CAD writes one, and
+ * a dimension without it is invalid enough that ezdxf's auditor deletes the
+ * entity outright. Readers left to regenerate the geometry themselves disagree
+ * about how, which is how a horizontal dimension ends up drawn at an angle.
+ *
+ * Same geometry the entity describes, so a CAD user can still stretch or
+ * restyle the dimension and have it regenerate to match.
+ */
+function addDimBlock(dxf, ent, geom, height, index) {
+  // Anonymous dimension blocks are *D1, *D2, … — addBlock() on the writer
+  // strips the leading '*', so go through the blocks section directly.
+  const block = dxf.blocks.addBlock(`*D${index}`, dxf.objects, false);
+  block.flags = BlockFlags.AnonymousBlock;
+
+  const { d1, d2, v, normal } = geom;
+  const arrow = height * 0.6;   // DIMASZ
+  const extOvershoot = height * 0.5;    // DIMEXE
+  const extGap = height * 0.25;         // DIMEXO
+
+  block.addLine(point3d(d1[0], d1[1], 0), point3d(d2[0], d2[1], 0));
+
+  // Extension lines: from just clear of the measured point to just past the
+  // dimension line. Skipped when the dimension line passes through the point.
+  const addExtLine = (from, to) => {
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+    const len = Math.hypot(dx, dy);
+    if (len <= extGap) return;
+    const ux = dx / len;
+    const uy = dy / len;
+    block.addLine(
+      point3d(from[0] + ux * extGap, from[1] + uy * extGap, 0),
+      point3d(to[0] + ux * extOvershoot, to[1] + uy * extOvershoot, 0),
+    );
+  };
+  addExtLine(ent.p1, d1);
+  addExtLine(ent.p2, d2);
+
+  // Filled arrowheads, tip on the measured point. Too short a dimension has no
+  // room for them between the extension lines, so they flip to the outside.
+  const flip = geom.length < arrow * 2 ? -1 : 1;
+  const addArrow = (tip, along) => {
+    const bx = tip[0] + along[0] * arrow * flip;
+    const by = tip[1] + along[1] * arrow * flip;
+    const hx = normal[0] * arrow * 0.25;
+    const hy = normal[1] * arrow * 0.25;
+    addTriangle(
+      block,
+      point3d(tip[0], tip[1], 0),
+      point3d(bx - hx, by - hy, 0),
+      point3d(bx + hx, by + hy, 0),
+    );
+  };
+  addArrow(d1, v);
+  addArrow(d2, [-v[0], -v[1]]);
+
+  const textPos = point3d(geom.textMid[0], geom.textMid[1], 0);
+  block.addText(textPos, height, dimText(geom), {
+    rotation: geom.textAngle,
+    horizontalAlignment: TextHorizontalAlignment.Center,
+    verticalAlignment: TextVerticalAlignment.Middle,
+    secondAlignmentPoint: textPos,
+  });
+
+  return block.name;
 }
 
 /**
@@ -201,6 +324,7 @@ export function generateDxf(entities, { forCad = false } = {}) {
   // One style for the whole drawing, created only if something needs it.
   const dimHeight = drawingDimHeight(entities);
   let dimStyle = null;
+  let dimCount = 0;
 
   for (const ent of entities) {
     switch (ent.type) {
@@ -317,18 +441,25 @@ export function generateDxf(entities, { forCad = false } = {}) {
       case 'ldim':
       case 'adim': {
         if (dimStyle === null) dimStyle = createDimStyle(dxf, dimHeight);
-        const opts = { styleName: dimStyle, definitionPoint: dimAnchor(ent) };
+        const geom = dimGeometry(ent, dimHeight);
+        const opts = {
+          styleName: dimStyle,
+          definitionPoint: dimAnchor(geom),
+          // Group 11. Required, and the position CAD draws the text at.
+          middlePoint: point3d(geom.textMid[0], geom.textMid[1], 0),
+          blockName: addDimBlock(dxf, ent, geom, dimHeight, ++dimCount),
+        };
         const first  = point3d(ent.p1[0], ent.p1[1], 0);
         const second = point3d(ent.p2[0], ent.p2[1], 0);
 
-        if (ent.type === 'adim') {
-          dxf.addAlignedDim(first, second, opts);
-        } else {
-          // A rotated linear dimension measures along `angle`, so the viewer
-          // and CAD both report the projected length rather than the slope
-          // distance — which is what hdim/ldim mean.
-          dxf.addLinearDim(first, second, { ...opts, angle: ent.type === 'hdim' ? 0 : 90 });
-        }
+        // All three are written as rotated linear dimensions, which measure
+        // along `angle`: 0 and 90 give hdim and ldim their projected lengths,
+        // and the p1→p2 direction gives adim the slope distance. An ALIGNED
+        // dimension would say the same thing for adim, but it carries no angle,
+        // so a reader has to infer the direction — ezdxf infers 0 and reports
+        // the horizontal projection. Writing the angle leaves nothing to infer,
+        // and is what ezdxf's own aligned dimensions do.
+        dxf.addLinearDim(first, second, { ...opts, angle: geom.angle });
         break;
       }
     }
